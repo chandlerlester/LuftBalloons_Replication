@@ -65,12 +65,12 @@ fredr_set_key("fdfb11170350fa8831cbed74b73f256c")
 FREData<-(if (requireNamespace("purrr", quietly = TRUE)) {
   
   library(purrr)
-  purrr::map_dfr(c("TOTRESNS", "FEDFUNDS", "GDPDEF", "GDPC1", "MORTGAGE30US"), fredr)
+  purrr::map_dfr(c("TOTRESNS", "FEDFUNDS", "GDPDEF", "GDPC1", "MORTGAGE30US", "BPCCRO1Q156NBEA"), fredr)
   
   # Using purrr::pmap_dfr() allows you to use varying optional parameters
   params <- list(
-    series_id = c("TOTRESNS", "FEDFUNDS", "GDPDEF", "GDPC1", "MORTGAGE30US"),
-    frequency = c("q","q","q","q","q")
+    series_id = c("TOTRESNS", "FEDFUNDS", "GDPDEF", "GDPC1", "MORTGAGE30US",  "BPCCRO1Q156NBEA"),
+    frequency = c("q","q","q","q","q", "q")
   )
   
   purrr::pmap_dfr(
@@ -107,3 +107,42 @@ Luft_balloons_data<-combined2%>%drop_na(index_nsa)
 
 # Remove other data from workspace 
 rm(list=setdiff(ls(),"Luft_balloons_data"))
+
+################################################################################################################################
+# get supplemental census data 
+library(censusapi)
+
+# set up my API key
+Sys.setenv(CENSUS_KEY="9dec005530b7713ec6c0c507f10838d329e2689d")
+readRenviron("~/.Renviron")
+Sys.getenv("CENSUS_KEY")
+
+apis<-listCensusApis()
+
+mygeo <-listCensusMetadata(name="pep/int_population", vintage=2000, type="geography") # check geography options
+myvars <-listCensusMetadata(name="pep/int_population", vintage=2000, type="variables") # check geography options 
+
+monthly_pop<-getCensus(name="pep/int_population", vintage= 2000, vars=c("GEONAME", "DATE_", "POP", "STATE"), region="state")
+
+# Fix variable values 
+monthly_pop$quarter<-c(3)
+monthly_pop$year<-as.numeric(monthly_pop$DATE_) + c(1999)
+myvars<-names(monthly_pop) %in% c("state","DATE_", "STATE")
+monthly_pop <-monthly_pop[!myvars]
+monthly_pop<-monthly_pop%>%rename(state="GEONAME")
+
+# Fix the states so that they are abbreviations
+monthly_pop<-monthly_pop%>%filter(monthly_pop$state%in%state.name)# get rid of the predetermined reigons 
+monthly_pop$state<-state2abbr(monthly_pop$state) #change from state names to state abreviations 
+
+
+###########################################################################################################################
+# Now join the data 
+
+Luft_balloons_data<-left_join(Luft_balloons_data, monthly_pop, by = c("year", "quarter", "state"))
+Luft_balloons_data$Population<-as.numeric(Luft_balloons_data$Population)
+Luft_balloons_data$POP<-as.numeric(Luft_balloons_data$POP)
+Luft_balloons_data<-replace_na(Luft_balloons_data,replace=list(Luft_balloons_data$POP>=2010))
+Luft_balloons_data$Population<-rowSums(Luft_balloons_data[,c("Population", "POP")], na.rm = TRUE)
+
+Luft_balloons_data<-Luft_balloons_data[,1:14]
