@@ -2,10 +2,11 @@ library(tidyr)
 library(dplyr)
 library(magrittr)
 
-# This is code for cleaning and creating the dataset form "NAME OF PAPER" by "AUTHORS"
+# This is code for cleaning and creating the dataset form 99 Luftballons by Del Negro & Otrok
 #   This paper looked at what was driving housing prices prior to the 2008 recession 
 #   Before the recession housing prices were being driven by local factors, but what is driving them now?
 #########################################################################################################################
+
 # Begin with BEA data 
 # Import Per capita income data 
 SQINC1__ALL_AREAS_1948_2019 <- read.csv("Per_cap_inc/SQINC1__ALL_AREAS_1948_2019.csv", header=T, check.names=FALSE)
@@ -196,12 +197,20 @@ deflated_data$inflation[1]=1
 deflated_data<-deflated_data%>%mutate(rPer_cap_Inc=Per_cap_Inc/inflation) 
 deflated_data<-deflated_data%>%mutate(rTOTRESNS=TOTRESNS/inflation)
 deflated_data<-deflated_data%>%mutate(rGDPC1=GDPC1/inflation)
-growth_data<- deflated_data %>% group_by(state) %>%mutate(index_nsag=(index_nsa-lag(index_nsa,1))/lag(index_nsa,1)*100)
+deflated_data<-deflated_data%>%mutate(rindex_nsa=index_nsa/inflation)
+growth_data<- deflated_data %>% group_by(state) %>%mutate(index_nsag=(rindex_nsa-lag(rindex_nsa,1))/lag(rindex_nsa,1))
 
-ggplot(growth_data, mapping=aes(x=yearq, y=index_nsag, color=state)) + geom_line() + scale_x_yearqtr()
-save(growth_data, file="Rep_data.csv")
+#filter out years with incomplete data and get ride of HI and AK 
+growth_data<-growth_data%>%filter(year>2000 & year<2019)%>%filter(state!="AK")%>%filter(state!="HI")
 
-##############################################################################################################################
+#Calculate the average annualized 
+averag <-aggregate(growth_data$index_nsag, by=list(growth_data$state), mean, na.rm=TRUE)
+averag<-averag%>%mutate(x=1800*x) #multiple to turn into percents and properly annualize data (18 years of data)
 
-# Next, detrend the data??? By State/Region??? Also remake regional variable 
+# Check to see if annualized growth rates are similar to figure 1 from the paper 
+ggplot(data=averag, aes(x=Group.1, y=x)) +
+  geom_bar(stat="identity", color="blue", fill="black", width=.45)+
+  theme_minimal()+
+  labs(x="State", y="Annualized Growth Rates")
+
 
