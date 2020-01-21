@@ -192,25 +192,100 @@ final_data2<-final_data%>% unite("yearq", c("year", "quarter"), sep="-", remove=
 final_data2$yearq<-as.yearqtr(final_data2$yearq, format = "%Y-%q")
 
 #Change to growth rates etc, transform the data 
-deflated_data<- final_data2%>%mutate(inflation=(PCEPILFE)/PCEPILFE[1])
+deflated_data<-final_data2%>%mutate(inflation=(PCEPILFE)/PCEPILFE[1])
 deflated_data$inflation[1]=1
 deflated_data<-deflated_data%>%mutate(rPer_cap_Inc=Per_cap_Inc/inflation) 
 deflated_data<-deflated_data%>%mutate(rTOTRESNS=TOTRESNS/inflation)
 deflated_data<-deflated_data%>%mutate(rGDPC1=GDPC1/inflation)
 deflated_data<-deflated_data%>%mutate(rindex_nsa=index_nsa/inflation)
-growth_data<- deflated_data %>% group_by(state) %>%mutate(index_nsag=(rindex_nsa-lag(rindex_nsa,1))/lag(rindex_nsa,1))
-
-#filter out years with incomplete data and get ride of HI and AK 
-growth_data<-growth_data%>%filter(year>2000 & year<2019)%>%filter(state!="AK")%>%filter(state!="HI")
+growth_data<- deflated_data %>% group_by(state) %>%mutate(index_nsag=100*(rindex_nsa-lag(rindex_nsa,1))/lag(rindex_nsa,1))
 
 #Calculate the average annualized 
+growth_data<-growth_data%>%filter(year>2000 & year<2019)%>%filter(state!="AK")%>%filter(state!="HI")
 averag <-aggregate(growth_data$index_nsag, by=list(growth_data$state), mean, na.rm=TRUE)
-averag<-averag%>%mutate(x=1800*x) #multiple to turn into percents and properly annualize data (18 years of data)
+averag<-averag%>%mutate(x=17*x) #multiple to turn into percents and properly annualize data (18 years of data)
+
+#Calculate the average annualized for 2001-2005
+growth_data2<-growth_data%>%filter(year<2006)
+averag2 <-aggregate(growth_data2$index_nsag, by=list(growth_data2$state), mean, na.rm=TRUE)
+averag2<-averag2%>%mutate(x=4*x) #multiple to turn into percents and properly annualize data (5 years of data)
+
+###################################################################################################################################
 
 # Check to see if annualized growth rates are similar to figure 1 from the paper 
-ggplot(data=averag, aes(x=Group.1, y=x)) +
+# Change some variable names 
+averag<-averag%>%rename(state="Group.1")
+averag2<-averag2%>%rename(state="Group.1")
+
+# Create the barchart 
+ggplot(data=averag2, aes(x=region, y=x)) +
   geom_bar(stat="identity", color="blue", fill="black", width=.45)+
   theme_minimal()+
   labs(x="State", y="Annualized Growth Rates")
 
+# Check updated data
+ggplot(data=averag, aes(x=region, y=x)) +
+  geom_bar(stat="identity", color="blue", fill="black", width=.45)+
+  theme_minimal()+
+  labs(x="State", y="Annualized Growth Rates")
 
+# Redo this barchart as a map? 
+library(maps)
+library(viridis)
+library(gridExtra)
+
+us_states <- map_data("state")
+us_states<-us_states%>%rename(state="region")
+
+us_states$state<-state2abbr(us_states$state)
+state_plot<-left_join(us_states, averag)
+
+# Plot of states for 2001-2018
+newmap<-ggplot(data = state_plot,
+       aes(x = long, y = lat,
+           group = group, fill = x))+ 
+  coord_map(projection = "albers", lat0 = 39, lat1 = 45) +
+  geom_polygon(color = "black", size = 0.1) + 
+  theme_void() +
+  labs(title = "Annualized Growth Rates 2001-2018", fill="Percent")+
+  scale_fill_viridis(option="plasma")
+
+# Check what it would have looked like in the original paper 
+state_plot2<-left_join(us_states, averag2)
+
+oldmap<-ggplot(data = state_plot2,
+       aes(x = long, y = lat,
+           group = group, fill = x))+ 
+  coord_map(projection = "albers", lat0 = 39, lat1 = 45) +
+  geom_polygon(color = "black", size = 0.1) + 
+  theme_void() +
+  labs(title = "Annualized Growth Rates 2001-2005", fill="Percent")+
+  scale_fill_viridis(option="plasma")
+
+
+grid.arrange(oldmap, newmap, nrow = 1)
+rm(list=setdiff(ls(),"growth_data"))
+####################################################################################################################################
+
+# Export data for dynamic factor analysis in MATLAB
+
+#first need to code up regions -- start with small sub regions (9) (should be coded in numbers from census data)
+growth_data$subregion[growth_data$state %in% c("ME", "NH", "VT", "MA", "CT", "RI")]<-"New England"
+growth_data$subregion[growth_data$state %in% c("NY", "PA", "NJ")]<-"Mid-Atlantic"
+growth_data$subregion[growth_data$state %in% c("ND", "SD", "NE", "KS", "MN", "IA", "MO")]<-"Great Plains"
+growth_data$subregion[growth_data$state %in% c("WI", "MI", "IL", "IN", "OH")]<-"Great Lakes"
+growth_data$subregion[growth_data$state %in% c("WA", "OR", "CA")]<-"Pacific West"
+growth_data$subregion[growth_data$state %in% c("ID", "NV", "UT", "AZ", "NM", "CO", "WY", "MT")]<-"Mountain West"
+growth_data$subregion[growth_data$state %in% c("TX", "OK", "AR", "LA")]<-"West South"
+growth_data$subregion[growth_data$state %in% c("MS", "AL", "TN", "KY")]<-"East South"
+growth_data$subregion[growth_data$state %in% c("FL", "GA", "SC", "NC", "VA", "WV", "MD", "DE")]<-"Atlantic South"
+
+#Code up regions used in original analysis (5)
+growth_data$region[growth_data$state %in% c("ME", "NH", "VT", "MA", "CT", "RI", "NY", "PA", "NJ")]<-"Northeast"
+growth_data$region[growth_data$state %in% c("ND", "SD", "NE", "KS", "MN", "IA", "MO","WI", "MI", "IL", "IN", "OH")]<-"Midwest"
+growth_data$region[growth_data$state %in% c("WA", "OR", "CA","ID", "NV", "UT", "AZ", "NM", "CO", "WY", "MT")]<-"West"
+growth_data$region[growth_data$state %in% c("TX", "OK", "AR", "LA")]<-"Southwest"
+growth_data$region[growth_data$state %in% c("MS", "AL", "TN", "KY","FL", "GA", "SC", "NC", "VA", "WV", "MD", "DE")]<-"Southeast"
+
+
+write.csv(growth_data,"growth_data.csv")
