@@ -1,4 +1,4 @@
-# LuftBalloons Replication
+# Luftballons Replication
 
 This repository re-examines the analysis done in "99 Luftballons: Monetary Policy and the house price boom across the U.S. states" by Del Negro and Otrok 
 
