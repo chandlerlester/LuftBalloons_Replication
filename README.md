@@ -10,7 +10,7 @@ The map below shows changes in the annualized average growth rate of the real OF
 
 ![map](/data_map.png)
 
-I focus on theorectical macroeconomics, so this project is a work in progress. Currently, I have:
+I focus on theorectical macroeconomics, so this project is just for fun and for playing around with some data. Currently, I have:
 
 - [x] Complied the data using APIs in R 
 - [x] Adjusted my data for inflation, calculated growth rates, coded regional data
